@@ -57,7 +57,7 @@ class Auditor
      * @return int Amount of packages with vulnerabilities found
      * @throws InvalidArgumentException If no packages are passed in
      */
-    public function audit(IOInterface $io, RepositorySet $repoSet, array $packages, string $format, bool $warningOnly = true, array $ignoreList = [], string $abandoned = self::ABANDONED_FAIL): int
+    public function audit(IOInterface $io, RepositorySet $repoSet, array $packages, string $format, bool $warningOnly = true, array $ignoreList = [], string $abandoned = self::ABANDONED_FAIL, array $ignoredSeverities = []): int
     {
         $allAdvisories = $repoSet->getMatchingSecurityAdvisories($packages, $format === self::FORMAT_SUMMARY);
         // we need the CVE & remote IDs set to filter ignores correctly so if we have any matches using the optimized codepath above
@@ -65,7 +65,7 @@ class Auditor
         if (count($allAdvisories) > 0 && $ignoreList !== [] && $format === self::FORMAT_SUMMARY) {
             $allAdvisories = $repoSet->getMatchingSecurityAdvisories($packages, false);
         }
-        ['advisories' => $advisories, 'ignoredAdvisories' => $ignoredAdvisories] = $this->processAdvisories($allAdvisories, $ignoreList);
+        ['advisories' => $advisories, 'ignoredAdvisories' => $ignoredAdvisories] = $this->processAdvisories($allAdvisories, $ignoreList, $ignoredSeverities);
 
         $abandonedCount = 0;
         $affectedPackagesCount = 0;
@@ -141,9 +141,9 @@ class Auditor
      * @param array<string>|array<string,string> $ignoreList List of advisory IDs, remote IDs or CVE IDs that reported but not listed as vulnerabilities.
      * @phpstan-return array{advisories: array<string, array<PartialSecurityAdvisory|SecurityAdvisory>>, ignoredAdvisories: array<string, array<PartialSecurityAdvisory|SecurityAdvisory>>}
      */
-    private function processAdvisories(array $allAdvisories, array $ignoreList): array
+    private function processAdvisories(array $allAdvisories, array $ignoreList, array $ignoredSeverities): array
     {
-        if ($ignoreList === []) {
+        if ($ignoreList === [] && $ignoredSeverities === []) {
             return ['advisories' => $allAdvisories, 'ignoredAdvisories' => []];
         }
 
@@ -167,6 +167,11 @@ class Auditor
                 }
 
                 if ($advisory instanceof SecurityAdvisory) {
+                    if (in_array($advisory->severity, $ignoredSeverities, true)) {
+                        $isActive = false;
+                        $ignoreReason = "Ignored via --ignore-severity={$advisory->severity}";
+                    }
+
                     if (in_array($advisory->cve, $ignoredIds, true)) {
                         $isActive = false;
                         $ignoreReason = $ignoreList[$advisory->cve] ?? null;

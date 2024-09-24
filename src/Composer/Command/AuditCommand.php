@@ -33,6 +33,7 @@ class AuditCommand extends BaseCommand
                 new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables auditing of require-dev packages.'),
                 new InputOption('format', 'f', InputOption::VALUE_REQUIRED, 'Output format. Must be "table", "plain", "json", or "summary".', Auditor::FORMAT_TABLE, Auditor::FORMATS),
                 new InputOption('locked', null, InputOption::VALUE_NONE, 'Audit based on the lock file instead of the installed packages.'),
+                new InputOption('ignore-severity', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Ignore advisories of a certain severity level.', []),
             ])
             ->setHelp(
                 <<<EOT
@@ -65,7 +66,9 @@ EOT
 
         $auditConfig = $composer->getConfig()->get('audit');
 
-        return min(255, $auditor->audit($this->getIO(), $repoSet, $packages, $this->getAuditFormat($input, 'format'), false, $auditConfig['ignore'] ?? [], $auditConfig['abandoned'] ?? Auditor::ABANDONED_FAIL));
+        $ignoreSeverities = $input->getOption('ignore-severity') ?? [];
+
+        return min(255, $auditor->audit($this->getIO(), $repoSet, $packages, $this->getAuditFormat($input, 'format'), false, $auditConfig['ignore'] ?? [], $auditConfig['abandoned'] ?? Auditor::ABANDONED_FAIL, $ignoreSeverities));
     }
 
     /**
